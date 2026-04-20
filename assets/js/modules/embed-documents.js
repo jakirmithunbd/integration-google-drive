@@ -1,0 +1,2 @@
+;"use strict";(globalThis.webpackChunkintegration_google_drive=globalThis.webpackChunkintegration_google_drive||[]).push([[637,769],{1609(e){e.exports=window.React},5795(e){e.exports=window.ReactDOM},790(e){e.exports=window.ReactJSXRuntime},6087(e){e.exports=window.wp.element},7723(e){e.exports=window.wp.i18n}},e=>{e.O(0,[96,804],()=>{return o=2175,e(e.s=o);var o});e.O()}]);
+//# sourceMappingURL=embed-documents.js.map

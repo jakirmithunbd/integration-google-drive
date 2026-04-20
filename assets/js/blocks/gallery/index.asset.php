@@ -1,0 +1,1 @@
+<?php return array('dependencies' => array('react', 'react-dom', 'react-jsx-runtime', 'wp-block-editor', 'wp-blocks', 'wp-components', 'wp-element', 'wp-i18n', 'ccpigd-shared'), 'version' => 'dd5a376cd60d7c765c11', 'handle' => 'undefined-blocks/gallery/index');

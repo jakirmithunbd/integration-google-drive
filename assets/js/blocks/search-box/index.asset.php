@@ -1,0 +1,1 @@
+<?php return array('dependencies' => array('react', 'react-dom', 'react-jsx-runtime', 'wp-block-editor', 'wp-blocks', 'wp-components', 'wp-element', 'wp-i18n', 'ccpigd-shared'), 'version' => 'c50cf527fb55d4579663', 'handle' => 'undefined-blocks/search-box/index');

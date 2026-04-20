@@ -1,0 +1,1 @@
+<?php return array('dependencies' => array('react', 'react-dom', 'react-jsx-runtime', 'wp-block-editor', 'wp-blocks', 'wp-components', 'wp-element', 'wp-i18n', 'ccpigd-shared'), 'version' => '2838d7011da05f6ffa15', 'handle' => 'undefined-blocks/embed-documents/index');

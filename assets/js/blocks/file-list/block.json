@@ -1,0 +1,32 @@
+{
+    "$schema": "https://schemas.wp.org/trunk/block.json",
+    "apiVersion": 3,
+    "name": "integration-google-drive/file-list",
+    "version": "1.0.0",
+    "title": "File List",
+    "category": "integration-google-drive",
+    "icon": "format-gallery",
+    "description": "Display files from Google Drive as a file list",
+    "keywords": ["file list", "google drive", "files"],
+    "textdomain": "integration-google-drive",
+    "supports": {
+        "html": false,
+        "align": ["wide", "full"],
+        "spacing": {
+            "margin": true,
+            "padding": true
+        }
+    },
+    "attributes": {
+        "id": {
+            "type": "number"
+        },
+        "type": {
+            "type": "string",
+            "default": "file-list"
+        }
+    },
+    "editorScript": "file:./index.js",
+    "editorStyle": "file:./index.css",
+    "style": ["file:../../../../assets/css/admin.css", "file:../../../../assets/css/common.css"]
+}

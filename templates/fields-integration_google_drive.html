@@ -1,0 +1,48 @@
+<script id="tmpl-nf-field-integration_google_drive" type="text/template">
+    <#
+    const moduleId = data.module_id;
+    #>
+
+    <# if (moduleId) { #>
+        <div
+            data-module-id="{{{ moduleId }}}"
+            data-id="ccpigd_{{{ moduleId }}}"
+            data-type="file-uploader"
+            data-status="public"
+            id="ccpigd-module-{{{ moduleId }}}"
+            class="ccpigd-top-level-wrapper ccpigd-module ccpigd-file-uploader"
+            data-field-name="nf-field-{{{ data.id }}}"
+        ></div>
+    <# } else { #>
+        <div class="ccpigd-top-level-wrapper bg-transparent">
+            <div class="ccpigd-notice-card flex-center rounded-md ccpigd-notice-status-primary">
+                <div class="ccpigd-notice-card-wrapper flex-center flex-col">
+                    <span class="ccpigd-icon ccpigd-notice-card-wrapper-icon primary">cloud_upload</span>
+                    <div class="ccpigd-notice-card-wrapper-content flex-center flex-col">
+                        <h3 class="ccpigd-title">Please add or Select Uploader Module</h3>
+                        <p class="ccpigd-description">Click on the "Add new module" or "Select Module" to setup your module</p>
+                    </div>
+                </div>
+            </div>
+        </div>
+    <# } #>
+
+    <input
+        id="nf-field-{{{ data.id }}}"
+        name="nf-field-{{{ data.id }}}"
+        aria-describedby="nf-error-{{{ data.id }}}"
+        class="{{{ data.renderClasses() }}} nf-element ccpigd-hidden-input"
+        type="text"
+        value="{{{ data.value }}}"
+        aria-labelledby="nf-label-field-{{{ data.id }}}"
+        data-field-name="nf-field-{{{ data.id }}}"
+        data-min-files="{{{ data.minFiles ?? '' }}}"
+        {{{ data.maybeRequired() }}}
+    >
+
+    <# if (moduleId) {
+        requestAnimationFrame(() => {
+            window.ccpigdRenderModules?.();
+        });
+    } #>
+</script>

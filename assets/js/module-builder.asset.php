@@ -1,0 +1,1 @@
+<?php return array('dependencies' => array('react', 'react-dom', 'react-jsx-runtime', 'wp-components', 'wp-element', 'wp-i18n'), 'version' => '0ff4d6f71b8be19b8e3c', 'handle' => 'undefined-module-builder');
