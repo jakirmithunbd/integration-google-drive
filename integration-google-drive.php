@@ -65,9 +65,9 @@ if ( function_exists( __NAMESPACE__ . '\\ccpigd_fs' ) ) {
                 require $puc_path;
 
                 $update_checker = \YahnisElsts\PluginUpdateChecker\v5\PucFactory::buildUpdateChecker(
-                    'https://github.com/jakirmithunbd/marquee-slider/',
+                    'https://github.com/jakirmithunbd/integration-google-drive/',
                     __FILE__,
-                    'marquee-slider'
+                    'integration-google-drive'
                 );
 
                 $update_checker->getVcsApi()->enableReleaseAssets();
