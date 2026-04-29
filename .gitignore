@@ -1,0 +1,15 @@
+node_modules
+/assets
+.DS_Store
+.DS_Store
+/build
+/includes/integrations/Gutenberg
+/integration-google-drive.zip
+/integration-google-drive
+/Notes
+# Test output files
+
+tests
+run-tests.sh
+debug.log
+yarn.lock
