@@ -9,7 +9,7 @@ use Freemius;
  * Plugin Name:       Integration for Google Drive
  * Plugin URI:        https://codeconfig.dev/integration-google-drive/
  * Description:       Seamlessly integrate Google Drive with WordPress to embed, share, play, and download documents and media files directly from Google Drive.
- * Version:           1.4.7
+ * Version:           1.4.4
  * Requires at least: 6.2
  * Requires PHP:      7.4
  * Author:            CodeConfig
