@@ -44,8 +44,8 @@ echo "Current version : $CURRENT"
 echo "New version     : $VERSION"
 echo ""
 
-# sed replace the Version line in the plugin header
-sed -i "s/^\( \* Version:\s*\)${CURRENT}/\1${VERSION}/" "$PLUGIN_FILE"
+# sed replace the Version line in the plugin header (perl for macOS/Linux compat)
+perl -i -pe "s/(\* Version:\s+)\Q${CURRENT}\E/\${1}${VERSION}/" "$PLUGIN_FILE"
 
 # Verify the change was applied
 UPDATED=$(grep -m1 "^\s*\* Version:" "$PLUGIN_FILE" | awk '{print $NF}')
