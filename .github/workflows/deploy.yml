@@ -1,0 +1,36 @@
+name: Release Plugin
+
+on:
+  push:
+    tags:
+      - '*'
+
+permissions:
+  contents: write   # ← this is required to create releases and upload assets
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Create plugin ZIP
+        run: |
+          mkdir -p build/integration-google-drive
+          rsync -r --exclude='.git' \
+            --exclude='.github' \
+            --exclude='node_modules' \
+            --exclude='*.zip' \
+            --exclude='build' \
+            . build/integration-google-drive/
+          cd build
+          zip -r ../integration-google-drive.zip integration-google-drive/
+
+      - name: Upload ZIP to GitHub Release
+        uses: softprops/action-gh-release@v2
+        with:
+          files: integration-google-drive.zip
+        env:
+          GITHUB_TOKEN: ${{ secrets._TOKEN }}

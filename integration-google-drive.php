@@ -58,6 +58,21 @@ if ( function_exists( __NAMESPACE__ . '\\ccpigd_fs' ) ) {
 
         ccpigd_fs();
         do_action( 'ccpigd_loaded' );
+
+        if ( ! ccpigd_fs()->is_premium() ) {
+            $puc_path = plugin_dir_path( __FILE__ ) . 'plugin-update-checker/plugin-update-checker.php';
+            if ( file_exists( $puc_path ) ) {
+                require $puc_path;
+
+                $update_checker = \YahnisElsts\PluginUpdateChecker\v5\PucFactory::buildUpdateChecker(
+                    'https://github.com/jakirmithunbd/marquee-slider/',
+                    __FILE__,
+                    'marquee-slider'
+                );
+
+                $update_checker->getVcsApi()->enableReleaseAssets();
+            }
+        }
     }
     define( 'CCPIGD_FILE', __FILE__ );
     require_once plugin_dir_path( CCPIGD_FILE ) . 'core/config.php';
