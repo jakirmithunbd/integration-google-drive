@@ -6,7 +6,6 @@ use function CodeConfig\ccpigd_fs;
 use CodeConfig\IGD\API\BaseController;
 use CodeConfig\IGD\App\App;
 use CodeConfig\IGD\Integrations\MediaLibrary__premium_only as IntegrationsMediaLibrary;
-use CodeConfig\IGD\Integrations\MediaLibrary__premium_only\Migration;
 use CodeConfig\IGD\Models\Attachment;
 use CodeConfig\IGD\Utils\Helpers;
 use Exception;

@@ -2,6 +2,7 @@
 
 namespace CodeConfig\IGD;
 
+use CodeConfig\IGD\App\Account;
 use CodeConfig\IGD\App\Accounts;
 use CodeConfig\IGD\Models\Notices;
 use CodeConfig\IGD\Utils\Helpers;
@@ -252,6 +253,7 @@ class Enqueue {
      * @return bool
      */
     private function is_elementor_editor() : bool {
+        // phpcs:ignore WordPress.Security.NonceVerification.Recommended
         if ( isset( $_GET['elementor-preview'] ) || isset( $_GET['action'] ) && $_GET['action'] === 'elementor' ) {
             return true;
         }
@@ -416,7 +418,7 @@ class Enqueue {
      * Get general localize data
      *
      * @param string $hook Current page hook
-     * @param string $context Context (admin or frontend)
+     * @param string $script Context (admin or frontend)
      * @return array
      */
     private function getLocalizeData( $hook = false, $script = 'admin' ) {
@@ -461,6 +463,23 @@ class Enqueue {
             if ( is_wp_error( $accounts ) ) {
                 $accounts = [];
             }
+            $accounts = array_map( function ( Account $account ) {
+                $accountId = $account->getId();
+                $syncing = get_transient( "ccpigd_syncing_account_{$accountId}" );
+                return [
+                    'id'         => $accountId,
+                    'accountKey' => $account->getAccountKey(),
+                    'name'       => $account->getName(),
+                    'email'      => $account->getEmail(),
+                    'photo'      => $account->getPhoto(),
+                    'syncing'    => ( $syncing ? true : false ),
+                    'active'     => $account->getActive(),
+                    'lost'       => $account->getLost(),
+                    'rootId'     => $account->getRootId(),
+                    'storage'    => $account->getStorage(),
+                    'user'       => $account->getUser(),
+                ];
+            }, $accounts );
             $data['accounts'] = array_values( $accounts ?? [] );
             $data['settings'] = Helpers::getSettings();
             $data['defaultSettings'] = ccpigdGetDefaultSettings();

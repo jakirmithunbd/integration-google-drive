@@ -51,7 +51,6 @@ class Update_1_4_0 extends Updater
             return self::VERSION;
 
         } catch (\Throwable $e) {
-            error_log('Error during update ' . self::VERSION . ': ' . $e->getMessage());
 
             return new WP_Error(
                 'ccpigd_update_failed',
@@ -66,7 +65,7 @@ class Update_1_4_0 extends Updater
 
         $table = "{$wpdb->prefix}integration_google_drive_user_access";
 
-        // Check if table exists
+        // phpcs:ignore WordPress.DB.DirectDatabaseQuery.DirectQuery, WordPress.DB.DirectDatabaseQuery.NoCaching
         $tableExists = $wpdb->get_var(
             $wpdb->prepare("SHOW TABLES LIKE %s", $table)
         );
@@ -101,12 +100,10 @@ class Update_1_4_0 extends Updater
         $forceExists = $this->columnExists($table, 'force');
 
         if ($forceExists) {
-            // Drop old column
+            // phpcs:ignore WordPress.DB.DirectDatabaseQuery.DirectQuery
             $dropColumn = $wpdb->query(
-                $wpdb->prepare(
-                    "ALTER TABLE %i DROP COLUMN `force`",
-                    $table
-                )
+                // phpcs:ignore WordPress.DB.DirectDatabaseQuery.SchemaChange
+                $wpdb->prepare("ALTER TABLE %i DROP COLUMN `force`", $table)
             );
 
             if ($dropColumn === false) {
@@ -123,11 +120,10 @@ class Update_1_4_0 extends Updater
         $pagesExists = $this->columnExists($table, 'pages');
 
         if (!$pagesExists) {
+            // phpcs:ignore WordPress.DB.DirectDatabaseQuery.DirectQuery
             $addColumn = $wpdb->query(
-                $wpdb->prepare(
-                    "ALTER TABLE %i ADD COLUMN `pages` LONGTEXT DEFAULT NULL AFTER `folders`",
-                    $table
-                )
+                // phpcs:ignore WordPress.DB.DirectDatabaseQuery.SchemaChange
+                $wpdb->prepare("ALTER TABLE %i ADD COLUMN `pages` LONGTEXT DEFAULT NULL AFTER `folders`", $table)
             );
 
             if ($addColumn === false) {
@@ -148,6 +144,7 @@ class Update_1_4_0 extends Updater
 
         $table = "{$wpdb->prefix}integration_google_drive_files";
 
+        // phpcs:ignore WordPress.DB.DirectDatabaseQuery.DirectQuery, WordPress.DB.DirectDatabaseQuery.NoCaching
         $tableExists = $wpdb->get_var(
             $wpdb->prepare("SHOW TABLES LIKE %s", $table)
         );
@@ -196,8 +193,10 @@ class Update_1_4_0 extends Updater
             return true;
         }
 
+        // phpcs:ignore WordPress.DB.PreparedSQL.NotPrepared
         $sql = $wpdb->prepare("ALTER TABLE %i " . implode(', ', $operations), $table);
 
+        // phpcs:ignore WordPress.DB.PreparedSQL.NotPrepared, PluginCheck.Security.DirectDB.UnescapedDBParameter, WordPress.DB.DirectDatabaseQuery.DirectQuery
         $result = $wpdb->query($sql);
 
         if ($result === false) {
@@ -228,6 +227,7 @@ class Update_1_4_0 extends Updater
             return true; // Nothing to migrate
         }
 
+        // phpcs:ignore WordPress.DB.DirectDatabaseQuery.DirectQuery, WordPress.DB.DirectDatabaseQuery.NoCaching
         $files = $wpdb->get_results(
             $wpdb->prepare(
                 "SELECT id, fileData FROM %i WHERE fileData IS NOT NULL",
@@ -275,6 +275,7 @@ class Update_1_4_0 extends Updater
                 'canPreviewInCloud'    => intval($_fileData->canPreviewInCloud ?? 0),
             ];
 
+            // phpcs:ignore WordPress.DB.DirectDatabaseQuery.DirectQuery
             $updateResult = $wpdb->update(
                 $table,
                 [
@@ -311,19 +312,14 @@ class Update_1_4_0 extends Updater
                 ['%s']
             );
 
-            if ($updateResult === false) {
-                error_log('Failed migrating file ID ' . $file['id'] . ': ' . $wpdb->last_error);
-            }
-
             unset($name, $description, $size, $mimeType, $extension, $icon, $thumbnail, $isDir, $isStarred, $isShared, $media, $permissions, $additionalData);
         }
 
         if ($existsFileData) {
+            // phpcs:ignore WordPress.DB.DirectDatabaseQuery.DirectQuery, WordPress.DB.DirectDatabaseQuery.SchemaChange
             $wpdb->query(
-                $wpdb->prepare(
-                    "ALTER TABLE %i DROP COLUMN `fileData`",
-                    $table
-                )
+                // phpcs:ignore WordPress.DB.DirectDatabaseQuery.SchemaChange
+                $wpdb->prepare("ALTER TABLE %i DROP COLUMN `fileData`", $table)
             );
             wp_cache_delete("ccpigd_column_exists_{$table}_fileData", 'ccpigd_schema');
         }
@@ -387,6 +383,7 @@ class Update_1_4_0 extends Updater
 
         $table = "{$wpdb->prefix}integration_google_drive_shortcodes";
 
+        // phpcs:ignore WordPress.DB.DirectDatabaseQuery.DirectQuery, WordPress.DB.DirectDatabaseQuery.NoCaching
         $tableExists = $wpdb->get_var(
             $wpdb->prepare("SHOW TABLES LIKE %s", $table)
         );
@@ -395,6 +392,7 @@ class Update_1_4_0 extends Updater
             return new WP_Error('ccpigd_table_missing', 'Required table does not exist.');
         }
 
+        // phpcs:ignore WordPress.DB.DirectDatabaseQuery.DirectQuery, WordPress.DB.DirectDatabaseQuery.NoCaching
         $modules = $wpdb->get_results(
             $wpdb->prepare("SELECT id, data, status, type FROM %i", $table),
             ARRAY_A
@@ -410,6 +408,7 @@ class Update_1_4_0 extends Updater
             $type               = $module['type'] ?? '';
             $migratedModuleData = $this->migrateModuleData($moduleData, $type);
 
+            // phpcs:ignore WordPress.DB.DirectDatabaseQuery.DirectQuery, WordPress.DB.DirectDatabaseQuery.NoCaching
             $updateResult = $wpdb->update(
                 $table,
                 ['data'   => maybe_serialize($migratedModuleData), 'status' => $status],
@@ -417,10 +416,6 @@ class Update_1_4_0 extends Updater
                 ['%s', '%s'],
                 ['%d']
             );
-
-            if ($updateResult === false) {
-                error_log('Failed migrating module ID ' . $module['id'] . ': ' . $wpdb->last_error);
-            }
 
             unset($moduleData, $status, $type, $migratedModuleData);
         }

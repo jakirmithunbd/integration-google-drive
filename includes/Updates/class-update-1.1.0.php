@@ -18,7 +18,7 @@ class Update_1_1_0 extends Updater
 
             return self::VERSION;
         } catch (\Exception $e) {
-            error_log('Error during update ' . self::VERSION . ': ' . $e->getMessage());
+            return new \WP_Error('update_failed', __('Update to version 1.1.0 failed: ', 'integration-google-drive') . $e->getMessage());
         }
     }
 

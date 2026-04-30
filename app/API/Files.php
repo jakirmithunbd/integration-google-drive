@@ -46,6 +46,7 @@ class Files extends API {
             if ( !$response instanceof ServiceDriveDriveFile ) {
                 return new WP_Error(404, 'File not found.');
             }
+            wp_cache_flush_group( 'ccpigd_files' );
             return new File($response);
         } catch ( Exception $exception ) {
             return new WP_Error(500, $exception->getMessage());
@@ -83,6 +84,7 @@ class Files extends API {
             }
             $response->setAccountId( $this->accountId );
             $file = new File($response);
+            wp_cache_flush_group( 'ccpigd_files' );
             return $file->save();
         } catch ( Exception $exception ) {
             return new WP_Error(500, $exception->getMessage());
@@ -113,6 +115,7 @@ class Files extends API {
         }
         $response->setAccountId( $this->accountId );
         $file = new File($response);
+        wp_cache_flush_group( 'ccpigd_files' );
         return $file->save();
     }
 
@@ -138,6 +141,7 @@ class Files extends API {
         }
         $response->setAccountId( $this->accountId );
         $file = new File($response);
+        wp_cache_flush_group( 'ccpigd_files' );
         return $file->save();
     }
 
@@ -181,6 +185,7 @@ class Files extends API {
                 return new WP_Error(500, $exception->getMessage());
             }
         } while ( !empty( $pageToken ) );
+        wp_cache_flush_group( 'ccpigd_files' );
         return $files;
     }
 
@@ -236,6 +241,7 @@ class Files extends API {
                 return new WP_Error(500, $ex->getMessage());
             }
         } while ( !empty( $pageToken ) );
+        wp_cache_flush_group( 'ccpigd_files' );
         return $files;
     }
 
@@ -252,6 +258,7 @@ class Files extends API {
             }
             $batch->execute();
             $this->client->setUseBatch( false );
+            wp_cache_flush_group( 'ccpigd_files' );
             return true;
         } catch ( Exception $exception ) {
             return new WP_Error(500, $exception->getMessage());

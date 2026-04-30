@@ -233,12 +233,20 @@ class Shortcode extends BaseModel {
         }
         $shortcodes = [];
         foreach ( $ids as $id ) {
+            $cacheKey = "ccpigd_shortcode_{$id}";
+            $cacheShortcode = wp_cache_get( $cacheKey, 'ccpigd_shortcodes' );
+            if ( $cacheShortcode !== false ) {
+                $shortcodes[] = $cacheShortcode;
+                continue;
+            }
+            // phpcs:ignore WordPress.DB.DirectDatabaseQuery.DirectQuery
             $shortcode = $wpdb->get_row( $wpdb->prepare( "SELECT * FROM %i WHERE id = %d", $this->tableName, $id ), ARRAY_A );
             if ( is_wp_error( $shortcode ) ) {
                 return $shortcode;
             }
             if ( !empty( $shortcode ) ) {
                 $shortcodes[] = $shortcode;
+                wp_cache_set( $cacheKey, $shortcode, 'ccpigd_shortcodes' );
             }
         }
         if ( empty( $shortcodes ) ) {
@@ -257,6 +265,7 @@ class Shortcode extends BaseModel {
             }
             $results++;
         }
+        wp_cache_flush_group( 'ccpigd_shortcodes' );
         return $results;
     }
 
@@ -451,7 +460,7 @@ class Shortcode extends BaseModel {
      * and optional schema validation and sanitization.
      *
      * @param array $data The data array containing 'type' and serialized 'data'.
-     * @param bool $validateSchema Whether to validate the data against a schema.
+     * @param array $config Optional configuration for processing, including:
      *
      * @return array|WP_Error Processed and optionally validated data.
      */
@@ -811,13 +820,26 @@ class Shortcode extends BaseModel {
         if ( empty( $id ) ) {
             return new WP_Error(404, __( 'Shortcode ID is required.', 'integration-google-drive' ));
         }
-        $result = $this->wpdb->get_row( $this->wpdb->prepare( "SELECT * FROM %i WHERE id = %d", $this->tableName, $id ), ARRAY_A );
+        $cacheKey = "ccpigd_shortcode_{$id}";
+        $cached = wp_cache_get( $cacheKey, 'ccpigd_shortcodes' );
+        if ( $cached !== false ) {
+            return $cached;
+        }
+        global $wpdb;
+        // phpcs:ignore WordPress.DB.DirectDatabaseQuery.DirectQuery
+        $result = $wpdb->get_row( $wpdb->prepare( "SELECT * FROM %i WHERE id = %d", $this->tableName, $id ), ARRAY_A );
         if ( is_wp_error( $result ) ) {
             return $result;
         }
         if ( empty( $result ) ) {
             return new WP_Error(404, __( 'Shortcode not found.', 'integration-google-drive' ));
         }
+        wp_cache_set(
+            $cacheKey,
+            $result,
+            'ccpigd_shortcodes',
+            HOUR_IN_SECONDS
+        );
         return $result;
     }
 

@@ -10,12 +10,6 @@ use CodeConfig\IGD\API\Controllers\Notices;
 use CodeConfig\IGD\API\Controllers\Settings;
 use CodeConfig\IGD\API\Controllers\Shortcode;
 use CodeConfig\IGD\API\Controllers\Users;
-// use CodeConfig\IGD\API\Controllers\Menus;
-// use CodeConfig\IGD\API\Controllers\Notices;
-// use CodeConfig\IGD\API\Controllers\Photo;
-// use CodeConfig\IGD\API\Controllers\Settings;
-// use CodeConfig\IGD\API\Controllers\Shortcode;
-// use CodeConfig\IGD\API\Controllers\Users;
 use CodeConfig\IGD\Utils\Singleton;
 
 defined('ABSPATH') || exit('No direct script access allowed');

@@ -27,14 +27,19 @@ class Account extends BaseModel {
         if ( !function_exists( 'wp_get_current_user' ) ) {
             return [];
         }
-        // if (!ccpigdGetCurrentUserAccess()) {
-        //     return [];
-        // }
-        $result = $this->fetchAll( "SELECT * FROM %i", [$this->tableName] );
+        $cacheKey = "ccpigd_accounts_all";
+        $cacheAccounts = wp_cache_get( $cacheKey, 'ccpigd_accounts' );
+        if ( false !== $cacheAccounts ) {
+            return ( $cacheAccounts === "no-account-found" ? [] : $cacheAccounts );
+        }
+        global $wpdb;
+        $result = $wpdb->get_results( $wpdb->prepare( "SELECT * FROM %i", $this->tableName ) );
         if ( is_wp_error( $result ) ) {
             return $result;
         }
-        return $this->processAccounts( $result );
+        $processedAccounts = $this->processAccounts( $result );
+        wp_cache_set( $cacheKey, ( $processedAccounts ?: "no-account-found" ), 'ccpigd_accounts' );
+        return $processedAccounts;
     }
 
     /**
@@ -45,14 +50,18 @@ class Account extends BaseModel {
      */
     public function getAccount( $id = null ) {
         global $wpdb;
-        // if (!ccpigdGetCurrentUserAccess()) {
-        //     return null;
-        // }
+        $cacheKey = "ccpigd_account_" . ($id ?? 'active');
+        if ( false !== ($cachedAccount = wp_cache_get( $cacheKey, 'ccpigd_accounts' )) ) {
+            return $cachedAccount;
+        }
+        // phpcs:ignore WordPress.DB.DirectDatabaseQuery.DirectQuery, WordPress.DB.DirectDatabaseQuery.NoCaching
         $result = ( empty( $id ) ? $wpdb->get_row( $wpdb->prepare( "SELECT * FROM %i WHERE `active` = %d LIMIT 1", $this->tableName, 1 ) ) : $wpdb->get_row( $wpdb->prepare( "SELECT * FROM %i WHERE `id` = %s LIMIT 1", $this->tableName, $id ) ) );
         if ( is_wp_error( $result ) ) {
             return $result;
         }
-        return $this->processAccount( $result );
+        $result = $this->processAccount( $result );
+        wp_cache_set( $cacheKey, $result, 'ccpigd_accounts' );
+        return $result;
     }
 
     /**
@@ -62,12 +71,21 @@ class Account extends BaseModel {
      * @return AppAccount|WP_Error|false The account object if found, or a WP_Error object if not found.
      */
     public function getAccountByKey( $key ) {
+        $cacheKey = "ccpigd_account_key_{$key}";
+        if ( false !== ($cachedAccount = wp_cache_get( $cacheKey, 'ccpigd_accounts' )) ) {
+            return $cachedAccount;
+        }
         global $wpdb;
+        // phpcs:ignore WordPress.DB.DirectDatabaseQuery.DirectQuery
         $result = $wpdb->get_row( $wpdb->prepare( "SELECT * FROM %i WHERE `accountKey` = %s LIMIT 1", $this->tableName, $key ) );
         if ( is_wp_error( $result ) ) {
             return $result;
         }
-        return $this->processAccount( $result );
+        $result = $this->processAccount( $result );
+        wp_cache_set( $cacheKey, $result, 'ccpigd_accounts' );
+        $cacheKeyById = "ccpigd_account_{$result->getId()}";
+        wp_cache_set( $cacheKeyById, $result, 'ccpigd_accounts' );
+        return $result;
     }
 
     /**
@@ -180,6 +198,9 @@ class Account extends BaseModel {
         if ( is_wp_error( $result ) ) {
             return $result;
         }
+        wp_cache_delete( "ccpigd_account_{$account->getId()}", 'ccpigd_accounts' );
+        wp_cache_delete( "ccpigd_account_active", 'ccpigd_accounts' );
+        wp_cache_delete( "ccpigd_accounts_all", 'ccpigd_accounts' );
         return (bool) $result;
     }
 
@@ -238,6 +259,9 @@ class Account extends BaseModel {
         if ( is_wp_error( $result ) ) {
             return $result;
         }
+        wp_cache_delete( "ccpigd_account_{$account->getId()}", 'ccpigd_accounts' );
+        wp_cache_delete( "ccpigd_account_active", 'ccpigd_accounts' );
+        wp_cache_delete( "ccpigd_accounts_all", 'ccpigd_accounts' );
         return (bool) $result;
     }
 
@@ -273,6 +297,9 @@ class Account extends BaseModel {
         // Remove all files and folders associated with the account
         $filesModel = Files::getInstance();
         $filesModel->deleteFilesByAccountId( $id );
+        wp_cache_delete( "ccpigd_account_{$id}", 'ccpigd_accounts' );
+        wp_cache_delete( "ccpigd_account_active", 'ccpigd_accounts' );
+        wp_cache_delete( "ccpigd_accounts_all", 'ccpigd_accounts' );
         return (bool) $result;
     }
 
@@ -349,11 +376,18 @@ class Account extends BaseModel {
         if ( empty( $id ) || !is_numeric( $id ) ) {
             return new WP_Error(400, __( 'Account ID is required.', 'integration-google-drive' ));
         }
+        $cacheKey = "ccpigd_account_tokens_{$id}";
+        if ( false !== ($cachedTokens = wp_cache_get( $cacheKey, 'ccpigd_accounts' )) ) {
+            return $cachedTokens;
+        }
+        // phpcs:ignore WordPress.DB.DirectDatabaseQuery.DirectQuery
         $result = $wpdb->get_row( $wpdb->prepare( "SELECT tokens FROM %i WHERE id = %s", $this->tableName, $id ), ARRAY_A );
         if ( is_wp_error( $result ) ) {
             return $result;
         }
-        return Helpers::decode( $result['tokens'] );
+        $tokens = Helpers::decode( $result['tokens'] );
+        wp_cache_set( $cacheKey, $tokens, 'ccpigd_accounts' );
+        return $tokens;
     }
 
     /**
@@ -499,39 +533,6 @@ class Account extends BaseModel {
      */
     public function isAccountValid( $id ) {
         return $this->isValidAccount( $id );
-    }
-
-    /**
-     * Get accounts with pagination
-     *
-     * @param int $page Page number (default: 1)
-     * @param int $perPage Items per page (default: 10)
-     * @param string $orderBy Order by column (default: 'createdAt')
-     * @param string $order Order direction (default: 'DESC')
-     * @return array|WP_Error Array of accounts or WP_Error on failure
-     */
-    public function getAccountsPaginated(
-        $page = 1,
-        $perPage = 10,
-        $orderBy = 'createdAt',
-        $order = 'DESC'
-    ) {
-        $allowedOrderBy = [
-            'id',
-            'name',
-            'email',
-            'createdAt',
-            'updatedAt',
-            'active'
-        ];
-        $orderBy = $this->sanitizeOrderBy( $orderBy, $allowedOrderBy );
-        $order = $this->sanitizeOrder( $order );
-        $pagination = $this->sanitizePagination( $page, $perPage );
-        $result = $this->fetchAll( "SELECT * FROM %i ORDER BY `{$orderBy}` {$order} LIMIT %d OFFSET %d", [$this->tableName, $pagination['perPage'], $pagination['offset']] );
-        if ( is_wp_error( $result ) ) {
-            return $result;
-        }
-        return $this->processAccounts( $result );
     }
 
 }

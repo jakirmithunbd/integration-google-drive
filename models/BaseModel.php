@@ -152,6 +152,7 @@ abstract class BaseModel
         $insertedId = $this->wpdb->insert_id;
         if (is_int($insertedId) && $insertedId > 0) {
 
+            // phpcs:ignore WordPress.DB.DirectDatabaseQuery.DirectQuery, WordPress.DB.DirectDatabaseQuery.NoCaching
             return $wpdb->get_row($wpdb->prepare("SELECT * FROM %i WHERE id = %d", $this->tableName, $insertedId), $output);
         }
 
@@ -199,6 +200,7 @@ abstract class BaseModel
         }
 
         if ($updated > 0 && isset($where['id']) && is_int($where['id']) && $where['id'] > 0) {
+            // phpcs:ignore WordPress.DB.DirectDatabaseQuery.DirectQuery, WordPress.DB.DirectDatabaseQuery.NoCaching
             return $wpdb->get_row($wpdb->prepare("SELECT * FROM %i WHERE id = %d", $this->tableName, $where['id']), $output);
         }
 
@@ -214,7 +216,6 @@ abstract class BaseModel
      * @param array|string $where The conditions to delete. Can be an associative array or a raw SQL string with placeholders.
      * @param array $where_format The formats for the values in $where.
      * @param bool $allowAll Whether to allow deletion of all records without a WHERE clause. Defaults to false.
-     * @param array $data The values to use for the placeholders in the raw SQL string.
      * @return int|WP_Error The number of rows deleted if successful, or a WP_Error object on failure.
      */
     protected function delete($where = [], $where_format = [], $allowAll = false)
@@ -474,7 +475,7 @@ abstract class BaseModel
      * Check if a record exists based on given conditions
      *
      * @param array $where Array of where conditions
-     * @param array $where_format Array of formats for where conditions
+     * @param string|null $tableName Optional table name to check against, defaults to the model's table
      * @return bool|WP_Error True if record exists, false if not, WP_Error on database error
      */
     protected function exists(array $where, $tableName = null)
@@ -524,7 +525,6 @@ abstract class BaseModel
      *
      * @param string $column The column to retrieve
      * @param array $where Array of where conditions
-     * @param array $where_format Array of formats for where conditions
      * @return mixed|WP_Error The column value or WP_Error on error
      */
     protected function getColumn($column, array $where)

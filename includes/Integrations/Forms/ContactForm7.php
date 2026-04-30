@@ -76,6 +76,7 @@ class ContactForm7 extends BaseIntegration
         $folders = $this->getGoogleDriveFolder();
         ?>
         <h2><?php esc_html_e('Google Drive Upload', 'integration-google-drive'); ?></h2>
+        <?php wp_nonce_field('ccpigd_cf7_google_drive_settings', 'ccpigd_cf7_google_drive_nonce'); ?>
 
         <fieldset>
             <legend>
@@ -133,6 +134,11 @@ class ContactForm7 extends BaseIntegration
      */
     public function saveForm($contact_form, $args, $context)
     {
+        if (!wp_verify_nonce(sanitize_text_field(wp_unslash($_POST['ccpigd_cf7_google_drive_nonce'] ?? '')), 'ccpigd_cf7_google_drive_settings')) {
+            return;
+        }
+
+        // phpcs:ignore WordPress.Security.ValidatedSanitizedInput.MissingUnslash, WordPress.Security.ValidatedSanitizedInput.InputNotSanitized
         $data = isset($_POST['ccpigd-google-drive']) ? (array) $_POST['ccpigd-google-drive'] : [];
 
         $prop = [
@@ -171,7 +177,10 @@ class ContactForm7 extends BaseIntegration
                     }
 
                     $originalName = '';
+                    // phpcs:ignore WordPress.Security.NonceVerification.Missing
                     if (!empty($_FILES[$fieldName]['name'])) {
+
+                        // phpcs:ignore WordPress.Security.NonceVerification.Missing, WordPress.Security.ValidatedSanitizedInput.InputNotSanitized
                         $names        = (array) $_FILES[$fieldName]['name'];
                         $originalName = sanitize_file_name(reset($names));
                     }
@@ -186,13 +195,14 @@ class ContactForm7 extends BaseIntegration
             }
 
             if (is_wp_error($result) || empty($result)) {
+                $message = is_wp_error($result) ? $result->get_error_message() : __('Unknown error', 'integration-google-drive');
                 Notices::getInstance()->add([
                     'type'    => 'error',
                     'message' => sprintf(
                         /* translators: 1: File name, 2: Error message */
-                        __('Failed to upload file "%s" to Google Drive: %s', 'integration-google-drive'),
+                        __('Failed to upload file "%1$s" to Google Drive: %2$s', 'integration-google-drive'),
                         $name,
-                        is_wp_error($result) ? $result->get_error_message() : __('Unknown error', 'integration-google-drive')
+                        $message
                     ),
                 ]);
             } else {

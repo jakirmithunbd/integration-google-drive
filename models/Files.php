@@ -47,6 +47,7 @@ class Files extends BaseModel {
         );
         if ( !empty( $extensions ) ) {
             $placeholders = implode( ',', array_fill( 0, count( $extensions ), '%s' ) );
+            // phpcs:ignore WordPress.DB.PreparedSQLPlaceholders.UnfinishedPrepare, WordPress.DB.PreparedSQL.InterpolatedNotPrepared
             $sql .= $wpdb->prepare( " AND extension IN ({$placeholders})", $extensions );
         }
         if ( $order === 'ASC' ) {
@@ -72,7 +73,7 @@ class Files extends BaseModel {
         return $this->processFiles( $files );
     }
 
-    public function getFolders( $accountId, $config = [] ) {
+    public function getFolders( string $accountId, array $config = [] ) {
         if ( $this->isValidAccount( $accountId ) === false ) {
             return new WP_Error(403, __( 'This account is lost or does not exist. Please re-authorize it.', 'integration-google-drive' ));
         }
@@ -81,10 +82,18 @@ class Files extends BaseModel {
             'order'   => 'ASC',
         ];
         $config = wp_parse_args( $config, $default );
+        $shouldCount = !empty( $config['page'] ) && !empty( $config['perPage'] );
         global $wpdb;
         $sql = $wpdb->prepare( "SELECT * FROM %i WHERE accountId = %s AND extension = 'folder'", $this->tableName, $accountId );
+        $countSql = '';
+        if ( $shouldCount ) {
+            $countSql = $wpdb->prepare( "SELECT COUNT(*) FROM %i WHERE accountId = %s AND extension = 'folder'", $this->tableName, $accountId );
+        }
         if ( !empty( $config['parentId'] ) ) {
             $sql .= $wpdb->prepare( " AND parentId = %s", $config['parentId'] );
+            if ( $shouldCount ) {
+                $countSql .= $wpdb->prepare( " AND parentId = %s", $config['parentId'] );
+            }
         }
         if ( !empty( $config['orderBy'] ) && !empty( $config['order'] ) ) {
             $allowedOrderBy = [
@@ -101,11 +110,59 @@ class Files extends BaseModel {
                 $sql .= $wpdb->prepare( " ORDER BY %i DESC", $orderBy );
             }
         }
+        if ( $shouldCount ) {
+            $pagination = $this->sanitizePagination( (int) $config['page'], (int) $config['perPage'] );
+            $sql .= $wpdb->prepare( " LIMIT %d OFFSET %d", $pagination['perPage'], $pagination['offset'] );
+        }
+        $cacheKey = "ccpigd_folders_{$accountId}_" . md5( $sql );
+        if ( $cache = wp_cache_get( $cacheKey, 'ccpigd_folders' ) ) {
+            return $cache;
+        }
+        // phpcs:ignore WordPress.DB.PreparedSQL.NotPrepared, WordPress.DB.DirectDatabaseQuery.DirectQuery
         $files = $wpdb->get_results( $sql );
         if ( is_wp_error( $files ) ) {
             return $files;
         }
-        return $this->processFiles( $files );
+        $result = $this->processFiles( $files );
+        if ( is_wp_error( $result ) && empty( $result ) ) {
+            return [];
+        }
+        if ( $shouldCount ) {
+            $totalCount = $wpdb->get_var( $countSql );
+            if ( is_wp_error( $totalCount ) ) {
+                return $totalCount;
+            }
+            $totalPage = ceil( (int) $totalCount / intval( $config['perPage'] ) );
+            $perPage = (int) $config['perPage'];
+            $currentPage = (int) $config['page'];
+            $hasMore = $currentPage < $totalPage;
+            $nextPage = ( $hasMore ? $currentPage + 1 : null );
+            $response = [
+                'files'       => $result,
+                'totalCount'  => (int) $totalCount,
+                'totalPage'   => $totalPage,
+                'currentPage' => $currentPage,
+                'perPage'     => $perPage,
+                'hasMore'     => $hasMore,
+            ];
+            if ( $hasMore ) {
+                $response['nextPage'] = $nextPage;
+            }
+            wp_cache_set(
+                $cacheKey,
+                $response,
+                'ccpigd_folders',
+                HOUR_IN_SECONDS
+            );
+            return $response;
+        }
+        wp_cache_set(
+            $cacheKey,
+            $result,
+            'ccpigd_folders',
+            HOUR_IN_SECONDS
+        );
+        return $result;
     }
 
     public function search( array $data ) {
@@ -143,22 +200,36 @@ class Files extends BaseModel {
         );
         if ( !empty( $extensions ) ) {
             $placeholders = implode( ',', array_fill( 0, count( $extensions ), '%s' ) );
+            // phpcs:ignore WordPress.DB.PreparedSQLPlaceholders.UnfinishedPrepare, WordPress.DB.PreparedSQL.InterpolatedNotPrepared
             $queryString .= $wpdb->prepare( " AND extension IN ({$placeholders})", $extensions );
         }
         if ( $scope === 'parent' && !empty( $folderId ) ) {
             $queryString .= $wpdb->prepare( " AND parentId = %s", $folderId );
         }
-        $queryString .= $wpdb->prepare( " ORDER BY `{$orderBy}` {$order} LIMIT %d", $limit );
         if ( 'ASC' === $order ) {
-            $queryString = str_replace( "ORDER BY `{$orderBy}` {$order}", "ORDER BY (CASE WHEN extension = 'folder' THEN 0 ELSE 1 END), `{$orderBy}` ASC", $queryString );
+            $queryString .= $wpdb->prepare( " ORDER BY (CASE WHEN extension = 'folder' THEN 0 ELSE 1 END), %i ASC LIMIT %d", $orderBy, $limit );
         } else {
-            $queryString = str_replace( "ORDER BY `{$orderBy}` {$order}", "ORDER BY (CASE WHEN extension = 'folder' THEN 0 ELSE 1 END), `{$orderBy}` DESC", $queryString );
+            $queryString .= $wpdb->prepare( " ORDER BY (CASE WHEN extension = 'folder' THEN 0 ELSE 1 END), %i DESC LIMIT %d", $orderBy, $limit );
         }
+        $cacheKey = "ccpigd_search_{$accountId}_" . md5( $queryString );
+        if ( $cache = wp_cache_get( $cacheKey, 'ccpigd_search' ) ) {
+            return $cache;
+        }
+        // phpcs:ignore WordPress.DB.PreparedSQL.NotPrepared, WordPress.DB.DirectDatabaseQuery.DirectQuery
         $files = $wpdb->get_results( $queryString );
         if ( is_wp_error( $files ) ) {
             return $files;
         }
-        return $this->processFiles( $files );
+        $result = $this->processFiles( $files );
+        if ( !is_wp_error( $result ) && empty( $result ) ) {
+            wp_cache_add(
+                $cacheKey,
+                $result,
+                'ccpigd_search',
+                HOUR_IN_SECONDS
+            );
+        }
+        return $result;
     }
 
     /**
@@ -214,6 +285,11 @@ class Files extends BaseModel {
         if ( $this->isValidAccount( $accountId ) === false ) {
             return new WP_Error(403, __( 'This account is lost or does not exist. Please re-authorize it.', 'integration-google-drive' ));
         }
+        $cacheKey = "ccpigd_file_{$id}_{$accountId}_{$returnType}";
+        if ( $cache = wp_cache_get( $cacheKey, 'ccpigd_files' ) ) {
+            return $cache;
+        }
+        // phpcs:ignore WordPress.DB.DirectDatabaseQuery
         $file = $wpdb->get_row( $wpdb->prepare(
             "SELECT * FROM %i WHERE id = %s AND accountId = %s",
             $this->tableName,
@@ -223,7 +299,17 @@ class Files extends BaseModel {
         if ( empty( $file ) ) {
             return new WP_Error(404, __( 'The requested file could not be found. 1', 'integration-google-drive' ));
         }
-        return $this->processFile( $file, $returnType );
+        $file = $this->processFile( $file, $returnType );
+        if ( is_wp_error( $file ) || empty( $file ) ) {
+            return $file;
+        }
+        wp_cache_add(
+            $cacheKey,
+            $file,
+            'ccpigd_files',
+            HOUR_IN_SECONDS
+        );
+        return $file;
     }
 
     /**
@@ -253,11 +339,25 @@ class Files extends BaseModel {
         if ( empty( $key ) ) {
             return new WP_Error(404, __( 'The requested file could not be found. 4', 'integration-google-drive' ));
         }
+        $cacheKey = "ccpigd_file_key_{$key}_{$returnType}";
+        if ( $cache = wp_cache_get( $cacheKey, 'ccpigd_files' ) ) {
+            return $cache;
+        }
+        // phpcs:ignore WordPress.DB.DirectDatabaseQuery
         $file = $wpdb->get_row( $wpdb->prepare( "SELECT * FROM %i WHERE `fileKey` = %s", $this->tableName, $key ) );
         if ( empty( $file ) ) {
             return new WP_Error(404, __( 'The requested file could not be found. 5', 'integration-google-drive' ));
         }
         $file = $this->processFile( $file, $returnType );
+        if ( is_wp_error( $file ) || empty( $file ) ) {
+            return $file;
+        }
+        wp_cache_add(
+            $cacheKey,
+            $file,
+            'ccpigd_files',
+            HOUR_IN_SECONDS
+        );
         return $file;
     }
 
@@ -555,14 +655,26 @@ class Files extends BaseModel {
             }
             global $wpdb;
             $placeholders = implode( ',', array_fill( 0, count( $successors ), '%s' ) );
+            // phpcs:ignore WordPress.DB.PreparedSQLPlaceholders.ReplacementsWrongNumber, WordPress.DB.PreparedSQL.InterpolatedNotPrepared, WordPress.DB.PreparedSQL.InterpolatedNotPrepared
             $sql = $wpdb->prepare( "DELETE FROM %i WHERE (id IN ({$placeholders}) OR parentId IN ({$placeholders})) AND accountId = %s", array_merge(
                 [$this->tableName],
                 $successors,
                 $successors,
                 [$accountId]
             ) );
+            $cacheKey = "ccpigd_file_{$id}";
+            $fileKey = ccpigdGenerateKey( $id, $accountId );
+            $cacheKeyByFileKey = "ccpigd_file_key_{$fileKey}";
+            wp_cache_delete( $cacheKey, 'ccpigd_files' );
+            wp_cache_delete( $cacheKeyByFileKey, 'ccpigd_files' );
+            // phpcs:ignore WordPress.DB.PreparedSQL.NotPrepared, WordPress.DB.DirectDatabaseQuery.DirectQuery
             return $wpdb->query( $sql ) !== false;
         }
+        $cacheKey = "ccpigd_file_{$id}";
+        $fileKey = ccpigdGenerateKey( $id, $accountId );
+        $cacheKeyByFileKey = "ccpigd_file_key_{$fileKey}";
+        wp_cache_delete( $cacheKey, 'ccpigd_files' );
+        wp_cache_delete( $cacheKeyByFileKey, 'ccpigd_files' );
         return $this->delete( [
             'id'        => $id,
             'accountId' => $accountId,
@@ -576,6 +688,7 @@ class Files extends BaseModel {
      * @return bool|WP_Error True if the deletion was successful, false otherwise or an error.
      */
     public function deleteFilesByAccountId( $accountId ) {
+        wp_cache_flush_group( 'ccpigd_files' );
         return $this->delete( [
             'accountId' => $accountId,
         ], ['%s'] );
@@ -590,6 +703,8 @@ class Files extends BaseModel {
      * @return bool|WP_Error True if the update was successful, false otherwise
      */
     public function updateFile( $id, $data, $dataFormat ) {
+        $cacheKey = "ccpigd_file_{$id}";
+        wp_cache_delete( $cacheKey, 'ccpigd_files' );
         return $this->update(
             $data,
             [
@@ -605,12 +720,26 @@ class Files extends BaseModel {
         if ( $this->isValidAccount( $accountId ) === false ) {
             return new WP_Error(403, __( 'This account is lost or does not exist. Please re-authorize it.', 'integration-google-drive' ));
         }
+        $cacheKey = "ccpigd_file_{$folderId}";
+        if ( wp_cache_get( $cacheKey, 'ccpigd_files' ) ) {
+            return true;
+        }
+        // phpcs:ignore WordPress.DB.DirectDatabaseQuery.DirectQuery
         $folder = $wpdb->get_row( $wpdb->prepare(
             "SELECT * FROM %i WHERE parentId = %s AND accountId = %s",
             $this->tableName,
             $folderId,
             $accountId
         ) );
+        if ( is_wp_error( $folder ) || empty( $folder ) ) {
+            return false;
+        }
+        wp_cache_add(
+            $cacheKey,
+            $folder,
+            'ccpigd_files',
+            HOUR_IN_SECONDS
+        );
         return !empty( $folder );
     }
 
@@ -618,7 +747,27 @@ class Files extends BaseModel {
         if ( $this->isValidAccount( $accountId ) === false ) {
             return new WP_Error(403, __( 'This account is lost or does not exist. Please re-authorize it.', 'integration-google-drive' ));
         }
-        $folder = $this->fetch( "SELECT * FROM %i WHERE id = %s AND accountId = %s", [$this->tableName, $folderId, $accountId] );
+        $cacheKey = "ccpigd_file_{$folderId}";
+        if ( wp_cache_get( $cacheKey, 'ccpigd_files' ) ) {
+            return true;
+        }
+        global $wpdb;
+        // phpcs:ignore WordPress.DB.DirectDatabaseQuery.DirectQuery
+        $folder = $wpdb->get_row( $wpdb->prepare(
+            "SELECT * FROM %i WHERE id = %s AND accountId = %s",
+            $this->tableName,
+            $folderId,
+            $accountId
+        ) );
+        if ( is_wp_error( $folder ) || empty( $folder ) ) {
+            return false;
+        }
+        wp_cache_add(
+            $cacheKey,
+            $folder,
+            'ccpigd_files',
+            HOUR_IN_SECONDS
+        );
         return !empty( $folder );
     }
 
@@ -653,10 +802,21 @@ class Files extends BaseModel {
         if ( !$this->isValidAccount( $accountId ) ) {
             return new WP_Error(403, __( 'This account is lost or does not exist. Please re-authorize it.', 'integration-google-drive' ));
         }
+        $cacheKey = "ccpigd_file_count_{$accountId}";
+        if ( false !== ($cachedCount = wp_cache_get( $cacheKey, 'ccpigd_file_counts' )) ) {
+            return $cachedCount;
+        }
+        // phpcs:ignore WordPress.DB.DirectDatabaseQuery.DirectQuery
         $result = $wpdb->get_var( $wpdb->prepare( "SELECT COUNT(*) FROM %i WHERE accountId = %s", $this->tableName, $accountId ) );
         if ( is_wp_error( $result ) ) {
             return $result;
         }
+        wp_cache_add(
+            $cacheKey,
+            $result,
+            'ccpigd_file_counts',
+            HOUR_IN_SECONDS
+        );
         return (int) $result ?? 0;
     }
 
@@ -790,6 +950,7 @@ class Files extends BaseModel {
         global $wpdb;
         $sql = $wpdb->prepare( "SELECT COUNT(*) as count FROM %i WHERE parentId = %s AND accountId = %s", [$this->tableName, $folderId, $accountId] );
         if ( !empty( $filter['filterParams'] ) && !empty( $filter['filterSql'] ) ) {
+            // phpcs:ignore WordPress.DB.PreparedSQLPlaceholders.UnfinishedPrepare,WordPress.DB.PreparedSQL.NotPrepared
             $sql .= $wpdb->prepare( $filter['filterSql'], $filter['filterParams'] );
         }
         $count = $this->fetch( $sql );
@@ -886,18 +1047,18 @@ class Files extends BaseModel {
         }
         $downloadInfo = $downloadData[$linkKey];
         if ( $downloadInfo['expiry'] < time() && $downloadInfo['expiry'] != 0 ) {
-            $this->deleteDownloadEntry( $fileKey, $linkKey );
-            return false;
+            // $this->deleteDownloadEntry($fileKey, $linkKey);
+            return new WP_Error('link_expired', __( 'This download link has expired.', 'integration-google-drive' ));
         }
         $downloadLimit = intval( $downloadInfo['limit'] ?? 0 );
         if ( $downloadLimit > 0 && intval( $downloadInfo['downloadCount'] ?? 0 ) >= $downloadLimit ) {
-            $this->deleteDownloadEntry( $fileKey, $linkKey );
+            // $this->deleteDownloadEntry($fileKey, $linkKey);
             return new WP_Error('download_limit_exceeded', __( 'The download limit for this link has been exceeded.', 'integration-google-drive' ));
         }
         $hashedPassword = md5( sanitize_text_field( $password ) );
         if ( !empty( $downloadInfo['password'] ) ) {
             if ( empty( $password ) ) {
-                return new WP_Error('password_required', __( 'This shared link is protected by a password. Please provide the password to access the file.', 'integration-google-drive' ));
+                return new WP_Error('password_required', __( 'This Download link is protected by a password. Please provide the password to access the file.', 'integration-google-drive' ));
             }
             if ( $downloadInfo['password'] !== $hashedPassword ) {
                 return new WP_Error('invalid_password', __( 'The provided password is incorrect.', 'integration-google-drive' ));
@@ -912,7 +1073,7 @@ class Files extends BaseModel {
         return $downloadData[$linkKey];
     }
 
-    public function getDownloadKey( $fileKey, $options = [] ) {
+    public function getDownloadKey( string $fileKey, array $options = [] ) {
         $defaults = [
             'expireIn' => 3600,
             'password' => null,
@@ -949,7 +1110,7 @@ class Files extends BaseModel {
 
     private function getSharedData( $fileKey ) {
         global $wpdb;
-        $file = $wpdb->get_row( $wpdb->prepare( "SELECT metaData FROM %i WHERE fileKey = %s", $this->tableName, $fileKey ) );
+        $file = $this->getFileByKey( $fileKey );
         if ( !$file ) {
             return [];
         }
@@ -959,13 +1120,14 @@ class Files extends BaseModel {
 
     private function saveSharedData( $fileKey, $sharedData ) {
         global $wpdb;
-        $file = $wpdb->get_row( $wpdb->prepare( "SELECT metaData FROM %i WHERE fileKey = %s", $this->tableName, $fileKey ) );
+        $file = $this->getFileByKey( $fileKey );
         if ( !$file ) {
             return false;
         }
         $metaData = maybe_unserialize( $file->metaData ) ?? [];
         $metaData['sharedData'] = $sharedData;
-        return $wpdb->update(
+        // phpcs:ignore WordPress.DB.DirectDatabaseQuery.DirectQuery
+        $result = $wpdb->update(
             $this->tableName,
             [
                 'metaData' => maybe_serialize( $metaData ),
@@ -976,6 +1138,10 @@ class Files extends BaseModel {
             ['%s'],
             ['%s']
         );
+        if ( !is_wp_error( $result ) && $result !== false ) {
+            wp_cache_flush_group( 'ccpigd_files' );
+        }
+        return $result;
     }
 
     private function deleteSharedEntry( $fileKey, $linkKey ) {
@@ -1005,7 +1171,7 @@ class Files extends BaseModel {
 
     private function getDownloadData( $fileKey ) {
         global $wpdb;
-        $file = $wpdb->get_row( $wpdb->prepare( "SELECT metaData, extension FROM %i WHERE fileKey = %s", $this->tableName, $fileKey ) );
+        $file = $this->getFileByKey( $fileKey );
         if ( !$file ) {
             return [];
         }
@@ -1016,15 +1182,16 @@ class Files extends BaseModel {
         return $metaData['downloadData'] ?? [];
     }
 
-    private function saveDownloadData( $fileKey, $downloadData ) {
+    private function saveDownloadData( string $fileKey, array $downloadData ) {
         global $wpdb;
-        $file = $wpdb->get_row( $wpdb->prepare( "SELECT metaData FROM %i WHERE fileKey = %s", $this->tableName, $fileKey ) );
+        $file = $this->getFileByKey( $fileKey );
         if ( !$file ) {
             return false;
         }
         $metaData = maybe_unserialize( $file->metaData ) ?? [];
         $metaData['downloadData'] = $downloadData;
-        return $wpdb->update(
+        // phpcs:ignore WordPress.DB.DirectDatabaseQuery.DirectQuery
+        $result = $wpdb->update(
             $this->tableName,
             [
                 'metaData' => maybe_serialize( $metaData ),
@@ -1035,6 +1202,10 @@ class Files extends BaseModel {
             ['%s'],
             ['%s']
         );
+        if ( !is_wp_error( $result ) && $result !== false ) {
+            wp_cache_flush_group( 'ccpigd_files' );
+        }
+        return $result;
     }
 
     public function updateDownloadData( $combinedKey, $updates = [] ) {
@@ -1053,15 +1224,15 @@ class Files extends BaseModel {
         return $this->saveDownloadData( $fileKey, $downloadData );
     }
 
-    private function deleteDownloadEntry( $fileKey, $linkKey ) {
-        $downloadData = $this->getDownloadData( $fileKey );
-        if ( isset( $downloadData[$linkKey] ) ) {
-            unset($downloadData[$linkKey]);
-            return $this->saveDownloadData( $fileKey, $downloadData );
-        }
-        return false;
-    }
-
+    // private function deleteDownloadEntry($fileKey, $linkKey)
+    // {
+    //     $downloadData = $this->getDownloadData($fileKey);
+    //     if (isset($downloadData[$linkKey])) {
+    //         unset($downloadData[$linkKey]);
+    //         return $this->saveDownloadData($fileKey, $downloadData);
+    //     }
+    //     return false;
+    // }
     private function processFiles( $files, $returnType = 'array', $filter = null ) {
         $processedFiles = [];
         foreach ( $files as $file ) {

@@ -22,6 +22,23 @@ class Shortcode {
 
     public static $modulesList = ['file-browser', 'gallery'];
 
+    public const ALLOW_HTML_TAGS = [
+        'div'    => [
+            'id'                  => true,
+            'class'               => true,
+            'style'               => true,
+            'data-post_id'        => true,
+            'data-id'             => true,
+            'data-render_id'      => true,
+            'data-status'         => true,
+            'data-field-name'     => true,
+            'ccpigd-theme-status' => true,
+        ],
+        'script' => [
+            'type' => true,
+        ],
+    ];
+
     public function __construct() {
         if ( empty( $this->scModel ) ) {
             $this->scModel = ModelsShortcode::getInstance();

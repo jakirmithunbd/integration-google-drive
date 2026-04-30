@@ -134,7 +134,7 @@ class Content {
         exit;
     }
 
-    private function safeProxy( string $url, $cache = HOUR_IN_SECONDS ) : void {
+    private function getRawData( string $url ) {
         header( "Referrer-Policy: no-referrer" );
         $response = wp_remote_get( $url, [
             'timeout'     => 15,
@@ -178,20 +178,13 @@ class Content {
         // Extract the base content type (remove charset and other parameters)
         $baseContentType = ( $contentType ? explode( ';', $contentType )[0] : '' );
         $baseContentType = trim( $baseContentType );
-        // Validate content type is in the allowed list
-        if ( !in_array( $baseContentType, $allowedContentTypes, true ) ) {
-            $this->safeRedirect( $this->getUnknownIcon( 'image/jpeg' ), 0 );
-            exit;
+        if ( $data && in_array( $baseContentType, $allowedContentTypes, true ) ) {
+            return [
+                'data'        => $data,
+                'contentType' => $baseContentType,
+            ];
         }
-        if ( $data ) {
-            header( "Content-Type: {$baseContentType}" );
-            header( "Cache-Control: public, max-age={$cache}" );
-            // phpcs:ignore WordPress.Security.EscapeOutput.OutputNotEscaped
-            echo $data;
-        } else {
-            $this->safeRedirect( $this->getUnknownIcon( 'image/jpeg' ), 0 );
-        }
-        exit;
+        return false;
     }
 
     private function denyAccess( string $message = 'Access denied!', int $status = 403 ) : void {
@@ -244,12 +237,22 @@ class Content {
         exit;
     }
 
+    /**
+     * Summary of downloadWithGeneratedLink
+     * @param string $fileKey
+     * @param string $linkKey
+     * @param string $name
+     * @param string $ext
+     * @param string|null $shortcodeId
+     *
+     * @return never
+     */
     private function downloadWithGeneratedLink(
-        $fileKey,
-        $linkKey,
-        $name,
-        $ext,
-        $shortcodeId = null
+        string $fileKey,
+        string $linkKey,
+        string $name,
+        string $ext,
+        ?string $shortcodeId = null
     ) {
         if ( empty( $fileKey ) || empty( $linkKey ) ) {
             wp_die( 'File key is required.', 'Error', [
@@ -433,13 +436,30 @@ class Content {
         if ( empty( $file ) || empty( $file['thumbnail'] ) ) {
             $this->safeRedirect( $this->getUnknownIcon( $file['mimeType'] ?? $mimeType ), DAY_IN_SECONDS );
         }
-        $size = ccpigdSizeToString( $size );
-        $thumbnailUrl = str_replace( '=s220', ( $size ? "={$size}" : '' ), $file['thumbnail'] );
+        $stringSize = ccpigdSizeToString( $size );
+        $thumbnailUrl = str_replace( '=s220', ( $stringSize ? "={$stringSize}" : '' ), $file['thumbnail'] );
         $redirection = Helpers::getSetting( 'integrations.mediaLibrary.redirection', true );
         if ( $redirection ) {
             $this->safeRedirect( apply_filters( 'ccpigd_thumbnail_url', $thumbnailUrl ), $lifeTime );
         } else {
-            $this->safeProxy( apply_filters( 'ccpigd_thumbnail_url', $thumbnailUrl ), $lifeTime );
+            $thumbnailData = $this->getRawData( apply_filters( 'ccpigd_thumbnail_url', $thumbnailUrl ) );
+            $rawData = $thumbnailData['data'] ?? false;
+            $contentType = $thumbnailData['contentType'] ?? $mimeType;
+            if ( !$rawData ) {
+                $this->safeRedirect( $this->getUnknownIcon( $file['mimeType'] ?? $mimeType ), DAY_IN_SECONDS );
+            }
+            $cache = new Cache();
+            $extension = ( MimeTypeManager::isImage( $file['mimeType'] ?? '' ) ? MimeTypeManager::getExtension( $file['mimeType'] ) : 'webp' );
+            $cache->saveFile(
+                $rawData,
+                $file['fileKey'],
+                $size,
+                $extension
+            );
+            header( "Content-Type: {$contentType}" );
+            header( "Cache-Control: public, max-age={$lifeTime}" );
+            // phpcs:ignore WordPress.Security.EscapeOutput.OutputNotEscaped
+            echo $rawData;
         }
     }
 
@@ -476,6 +496,15 @@ class Content {
             header( "Content-Type: image/jpeg" );
             header( "Cache-Control: public, max-age=" . DAY_IN_SECONDS );
             wp_safe_redirect( $folderIcon, 302 );
+            exit;
+        }
+        $cache = new Cache();
+        $cachedFileRaw = $cache->getFileRaw( $key, $size, $ext );
+        if ( $cachedFileRaw ) {
+            header( "Content-Type: " . MimeTypeManager::getMimeType( $ext ) );
+            header( "Cache-Control: public, max-age=" . MONTH_IN_SECONDS );
+            // phpcs:ignore WordPress.Security.EscapeOutput.OutputNotEscaped
+            echo $cachedFileRaw;
             exit;
         }
         $file = ccpigdGetFileByKey( $key );

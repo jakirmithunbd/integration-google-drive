@@ -4,7 +4,7 @@ Tags: google drive, file manager, gallery, media library, embed
 Requires at least: 6.2
 Tested up to: 6.9
 Requires PHP: 7.4
-Stable tag: 1.4.4
+Stable tag: 1.4.5
 License: GPLv2 or later
 License URI: https://www.gnu.org/licenses/gpl-2.0.html
 
@@ -337,11 +337,24 @@ Use the built-in shortcode builder to generate parameters automatically.
 Example: `[integration-google-drive id="1"]`
 
 == Changelog ==
+= 1.4.6 (30-04-2026) =
+* Fixed: Fix account sync functions
+* Fixed: Share drive delete issue
+* Updated: Overall plugin performance & UI
+
+= 1.4.5 (13-04-2026) =
+* Fixed: Module issue when account is not authorized
+* Fixed: UI rendering issue after Copy & Move actions
+* Updated: Code optimizations for improved performance and stability
+
 = 1.4.4 (10-04-2026) =
 * Fixed: Resolved login issue.
 
 = 1.4.3 (09-04-2026) =
 * Fixed: Module builder filter tab broken issue.
+
+= 1.4.3 (06-04-2026) =
+* New: Add thumbnail caching functionality.
 
 = 1.4.2 (06-04-2026) =
 * Update: Enhanced account removal process for better reliability.

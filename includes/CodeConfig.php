@@ -32,6 +32,7 @@ class CodeConfig {
         Update::getInstance();
         Shortcode::getInstance();
         Locations::getInstance();
+        Schedule::getInstance();
         MediaLibrary::getInstance();
         ClassicEditor::getInstance();
         Blocks::getInstance();

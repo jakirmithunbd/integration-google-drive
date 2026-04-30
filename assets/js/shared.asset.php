@@ -1,1 +1,1 @@
-<?php return array('dependencies' => array(), 'version' => '6d5bf55d957b50641554', 'handle' => 'undefined-shared');
+<?php return array('dependencies' => array(), 'version' => '304c01da128db680458b', 'handle' => 'undefined-shared');

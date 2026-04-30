@@ -30,7 +30,7 @@ class App {
 
     private $client;
 
-    public function __construct( $accountId = null ) {
+    public function __construct( ?string $accountId = null ) {
         if ( null == $accountId ) {
             $activeAccount = Accounts::getInstance()->getAccount();
             if ( is_wp_error( $activeAccount ) || empty( $activeAccount ) ) {
@@ -84,8 +84,9 @@ class App {
      * If the $force parameter is set to true, the function will request the file from the API and save it to the
      * database, even if the file is already cached.
      *
-     * @param string $key The file key.
+     * @param string $key The key of the file to retrieve.
      * @param bool $force Whether to force the request to the API and save the result to the database.
+     * @param string $output The output format of the file object. Can be either 'array' or 'object'. Default is 'array'.
      *
      * @return array|false|WP_Error The file object or false if the file does not exist.
      */
@@ -120,7 +121,7 @@ class App {
      *
      * This function fetches a folder's details using the provided key and
      * returns the associated files if the folder is found.
-     *
+     * @param string $fileKey The key of the folder to retrieve.
      * @param array $args An associative array containing:
      *                    - 'fileKey': The key of the folder to retrieve.
      *                    - 'type': The type of the key (e.g., 'my-drive' or 'folder').
@@ -297,7 +298,7 @@ class App {
         ];
     }
 
-    public function getFolders( $accountId = null, $config = [] ) {
+    public function getFolders( ?string $accountId = null, array $config = [] ) {
         if ( $accountId === null ) {
             $accountId = $this->accountId;
         }
@@ -326,7 +327,11 @@ class App {
      * returns the associated breadcrumb if the folder is found.
      *
      * @param string $fileKey The key of the folder to retrieve.
-     * @param string $type The type of the key (e.g., 'my-drive' or 'folder').
+     * @param array $args An associative array containing:
+     *                    - 'rootFileKey': The file key of the root folder (optional).
+     *                    - 'rootFolderKey': The folder key of the root folder (default: 'my-drive').
+     *                    - 'rootFolderName': The display name of the root folder (default: 'My Drive').
+     *
      *
      * @return array|WP_Error False if the folder is not found or the key is empty,
      *                        otherwise returns the breadcrumb associated with the folder.
@@ -494,8 +499,8 @@ class App {
     /**
      * Create a new folder
      *
-     * @param $name string
-     * @param $parent string
+     * @param string $name
+     * @param string $parentKey
      *
      * @return array|WP_Error
      */
@@ -520,7 +525,6 @@ class App {
     /**
      * Upload a file
      *
-     * @param array $args
      * @option name string
      * @option description string
      * @option type string
@@ -563,6 +567,7 @@ class App {
         if ( $result instanceof ServiceDriveDriveFile ) {
             $result->setAccountId( $accountId );
             $file = new File($result);
+            wp_cache_flush_group( 'ccpigd_files' );
             return $file->save();
         }
         if ( empty( $result['url'] ) ) {
@@ -605,8 +610,8 @@ class App {
 
     /**
      * Rename a file
-     *
-     * @param array $args The arguments
+     * @param string $fileKey The key of the file to rename
+     * @param string $name The new name of the file
      * @option fileId string The ID of the file to rename
      * @option name string The new name of the file
      *
@@ -625,7 +630,7 @@ class App {
             return new WP_Error(400, 'Invalid file ID');
         }
         $extension = pathinfo( $file['name'], PATHINFO_EXTENSION );
-        $name = sanitize_file_name( "{$name}.{$extension}" );
+        $name = rtrim( sanitize_text_field( "{$name}.{$extension}" ), '.' );
         return $this->files->rename( $fileId, $name );
     }
 
@@ -662,7 +667,8 @@ class App {
     /**
      * Generate a preview link for a file.
      *
-     * @param array $args The arguments.
+     * @param $fileKey string The key of the file to generate a preview link for.
+     * @param $mode string The mode of the preview link. Can be either 'preview', 'editable', or 'full-editable'.
      * @option fileId string The ID of the file to generate a preview link for.
      *
      * @return string|WP_Error The preview link, or null on failure.
@@ -1028,18 +1034,20 @@ class App {
      * @return array|WP_Error The list of files retrieved from the server or an empty array if
      *                        the folder ID or account ID is not provided, or if no files are found.
      */
-    private function fetchFilesFromServer( $args ) {
+    private function fetchFilesFromServer( array $args ) {
         $folderId = $args['id'] ?? null;
         $accountId = $args['accountId'] ?? null;
         if ( empty( $folderId ) || empty( $accountId ) ) {
             return [];
         }
+        $files = [];
         if ( $folderId === 'shared-drives' ) {
             $files = $this->files->listDrives();
             return $files;
+        } else {
+            $params = $this->buildServerParams( $args, $folderId );
+            $files = $this->files->listFiles( $params );
         }
-        $params = $this->buildServerParams( $args, $folderId );
-        $files = $this->files->listFiles( $params );
         if ( is_wp_error( $files ) ) {
             return $files;
         }
@@ -1052,7 +1060,7 @@ class App {
         return $this->fetchFilesFromCache( $args );
     }
 
-    private function buildServerParams( $args, $folderId ) {
+    private function buildServerParams( array $args, string $folderId ) {
         $query = "trashed=false";
         switch ( true ) {
             case !empty( $args['query'] ):

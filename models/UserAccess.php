@@ -38,6 +38,10 @@ class UserAccess extends BaseModel
                 'updatedAt'  => current_time('mysql', 1),
             ];
 
+            $cacheKey = "ccpigd_user_access_{$type}_{$value}";
+            wp_cache_delete($cacheKey, 'ccpigd_user_access');
+
+            // phpcs:ignore WordPress.DB.DirectDatabaseQuery.DirectQuery
             $wpdb->update(
                 $this->table,
                 $data,
@@ -61,12 +65,23 @@ class UserAccess extends BaseModel
         $format = ['%s', '%s', '%s', '%s', '%s', '%s'];
         $this->wpdb->insert($this->table, $data, $format);
 
+        $cacheKey = "ccpigd_user_access_{$type}_{$value}";
+        wp_cache_delete($cacheKey, 'ccpigd_user_access');
+
         return $this->wpdb->insert_id;
     }
 
     public function get($id)
     {
         global $wpdb;
+
+        $cacheKey  = "ccpigd_user_access_id_{$id}";
+        $cached    = wp_cache_get($cacheKey, 'ccpigd_user_access');
+        if ($cached !== false) {
+            return $cached;
+        }
+
+        // phpcs:ignore WordPress.DB.DirectDatabaseQuery.DirectQuery
         $result = $wpdb->get_row($wpdb->prepare("SELECT * FROM %i WHERE id = %d", $this->table, $id), ARRAY_A);
 
         if ($result) {
@@ -79,16 +94,24 @@ class UserAccess extends BaseModel
             }
         }
 
+        wp_cache_set($cacheKey, $result, 'ccpigd_user_access');
+
         return $result;
     }
 
     public function get_by($type, $value)
     {
-        global $wpdb;
 
-        if ($this->wpdb->get_var($this->wpdb->prepare("SHOW TABLES LIKE %s", $this->table)) !== $this->table) {
-            return;
+        $valueString = is_array($value) ? implode(', ', $value) : $value;
+
+        $cacheKey = "ccpigd_user_access_{$type}_{$valueString}";
+        $cached   = wp_cache_get($cacheKey, 'ccpigd_user_access');
+
+        if ($cached !== false) {
+            return $cached === "no-data-found" ? false : $cached;
         }
+
+        global $wpdb;
 
         if (empty($type) || empty($value)) {
             return false;
@@ -114,7 +137,7 @@ class UserAccess extends BaseModel
             $query       .= $wpdb->prepare(" AND value = %s", $value);
         }
 
-        // phpcs:ignore WordPress.DB.PreparedSQL.NotPrepared
+        // phpcs:ignore WordPress.DB.DirectDatabaseQuery.DirectQuery, WordPress.DB.PreparedSQL.NotPrepared
         $result = $wpdb->get_row($query, ARRAY_A);
 
         if (!empty($result)) {
@@ -125,11 +148,15 @@ class UserAccess extends BaseModel
             if (isset($result['pages'])) {
                 $result['pages'] = maybe_unserialize($result['pages']);
             }
-        } else {
-            $result = false;
+            wp_cache_set($cacheKey, $result, 'ccpigd_user_access');
+
+            return $result;
         }
 
-        return $result;
+        wp_cache_add($cacheKey, "no-data-found", 'ccpigd_user_access');
+
+        return false;
+
     }
 
 
@@ -154,13 +181,22 @@ class UserAccess extends BaseModel
 
     public function getAll()
     {
+        $cacheKey = "ccpigd_user_access_all";
+        $cached   = wp_cache_get($cacheKey, 'ccpigd_user_access');
+        if ($cached !== false) {
+            return $cached;
+        }
+
         global $wpdb;
+        // phpcs:ignore WordPress.DB.DirectDatabaseQuery.DirectQuery
         $results = $wpdb->get_results($wpdb->prepare("SELECT * FROM %i ORDER BY createdAt DESC", $this->table), ARRAY_A);
 
         foreach ($results as &$record) {
             $record['folders'] = maybe_unserialize($record['folders']);
             $record['pages']   = maybe_unserialize($record['pages']);
         }
+
+        wp_cache_set($cacheKey, $results, 'ccpigd_user_access');
 
         return $results;
     }
@@ -194,7 +230,12 @@ class UserAccess extends BaseModel
         $format       = ['%s', '%s', '%s', '%s', '%s'];
         $where_format = ['%d'];
 
-        return $this->wpdb->update($this->table, $data, $where, $format, $where_format);
+        $result = $this->wpdb->update($this->table, $data, $where, $format, $where_format);
+
+        $cacheKey = "ccpigd_user_access_{$type}_{$value}";
+        wp_cache_flush_group('ccpigd_user_access');
+
+        return $result;
     }
 
     /**
@@ -208,6 +249,10 @@ class UserAccess extends BaseModel
         $where        = ['id' => $id];
         $where_format = ['%d'];
 
-        return $this->wpdb->delete($this->table, $where, $where_format);
+        $result = $this->wpdb->delete($this->table, $where, $where_format);
+
+        wp_cache_flush_group('ccpigd_user_access');
+
+        return $result;
     }
 }

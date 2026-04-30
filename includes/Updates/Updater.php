@@ -34,14 +34,12 @@ abstract class Updater
             return (bool) $cached;
         }
 
-        $query = $wpdb->prepare(
+        // phpcs:ignore WordPress.DB.DirectDatabaseQuery.DirectQuery
+        $result = $wpdb->get_results($wpdb->prepare(
             "SHOW COLUMNS FROM %i LIKE %s",
             $table,
             $column
-        );
-
-        // phpcs:ignore WordPress.DB.DirectDatabaseQuery.DirectQuery
-        $result = $wpdb->get_results($query);
+        ));
 
         $exists = !empty($result);
 

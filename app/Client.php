@@ -265,10 +265,10 @@ class Client {
     }
 
     private function setCredentials() {
-        $connectionType = Helpers::getSetting( 'accounts.connectionType', 'manual' );
-        $clientId = CCPIGD_CLIENT_ID;
-        $clientSecret = CCPIGD_CLIENT_SECRET;
-        $redirectUri = CCPIGD_REDIRECT_URI;
+        $clientId = '';
+        $clientSecret = '';
+        $redirectUri = '';
+        $connectionType = 'manual';
         if ( $connectionType === 'manual' ) {
             $clientId = Helpers::getSetting( 'accounts.appClientId', null );
             $clientSecret = Helpers::getSetting( 'accounts.appClientSecret', null, 'decode' );

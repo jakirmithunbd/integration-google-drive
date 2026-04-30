@@ -7,7 +7,7 @@ defined('ABSPATH') or exit('Direct access to this file is not allowed.');
  */
 define('CCPIGD_DB_VERSION', '1.0.0');
 define('CCPIGD_OPTIONS_VERSION', '1.0.0');
-define('CCPIGD_VERSION', '1.4.4');
+define('CCPIGD_VERSION', '1.4.5');
 
 define('CCPIGD_URL', plugin_dir_url(CCPIGD_FILE));
 define('CCPIGD_ASSETS', CCPIGD_URL . 'assets');
@@ -42,13 +42,6 @@ define('CCPIGD_AUTHOR_URL', 'https://codeconfig.dev');
  */
 define('CCPIGD_ACCESS_CAP', 'manage_ccpigd_files');
 
-/**
- * Plugin constants for Google API
- */
-//
-define('CCPIGD_CLIENT_ID', '');
-define('CCPIGD_CLIENT_SECRET', '');
-define('CCPIGD_REDIRECT_URI', 'https://codeconfig.dev/?authorization=integration-google-drive');
 define('CCPIGD_MANUAL_REDIRECT_URI', site_url("/?authorization=integration-google-drive"));
 
 /**

@@ -55,6 +55,27 @@ class Account extends BaseController {
             "callback"            => [$this, "switch"],
             "permission_callback" => [$this, "managePermission"],
         ] );
+        register_rest_route( $this->namespace, "{$this->rest_base}/sync", [[
+            'methods'             => WP_REST_Server::READABLE,
+            'callback'            => [$this, 'syncStatus'],
+            'permission_callback' => [$this, 'manageSettingsPermission'],
+            'args'                => [
+                'accountKey' => [
+                    'type'     => 'string',
+                    'required' => true,
+                ],
+            ],
+        ], [
+            "methods"             => WP_REST_Server::EDITABLE,
+            "callback"            => [$this, "sync"],
+            "permission_callback" => [$this, "manageSettingsPermission"],
+            "args"                => [
+                'accountKey' => [
+                    'type'     => 'string',
+                    'required' => true,
+                ],
+            ],
+        ]] );
         register_rest_route( $this->namespace, "{$this->rest_base}/(?P<accountKey>[^/]+)", [[
             'methods'             => WP_REST_Server::READABLE,
             'callback'            => [$this, 'getAccount'],
@@ -112,6 +133,9 @@ class Account extends BaseController {
                     }
                 }
             }
+            if ( !empty( $connectionType ) ) {
+                Helpers::updateSetting( 'accounts.connectionType', $connectionType );
+            }
             // Generate new auth URL
             $authUrl = Client::getInstance( 'new' )->getAuthUrl();
             if ( empty( $authUrl ) ) {
@@ -138,6 +162,9 @@ class Account extends BaseController {
     public function getAccount( WP_REST_Request $request ) : WP_REST_Response {
         try {
             $accountKey = $request->get_param( 'accountKey' );
+            if ( empty( $accountKey ) ) {
+                return $this->errorResponse( __( 'Account key is required.', 'integration-google-drive' ), self::HTTP_BAD_REQUEST );
+            }
             $account = Accounts::getInstance()->getAccountByKey( $accountKey );
             if ( empty( $account ) ) {
                 return $this->errorResponse( 'No account found', self::HTTP_NOT_FOUND );
@@ -165,6 +192,51 @@ class Account extends BaseController {
             return $this->successResponse( $result, 'Account deleted successfully' );
         } catch ( \Exception $e ) {
             return $this->handleException( $e, 'Failed to delete account' );
+        }
+    }
+
+    public function syncStatus( WP_REST_Request $request ) : WP_REST_Response {
+        $accountKey = $request->get_param( 'accountKey' );
+        if ( empty( $accountKey ) ) {
+            return self::errorResponse( __( 'Account key is required.', 'integration-google-drive' ), self::HTTP_BAD_REQUEST );
+        }
+        $account = ccpigdGetAccountByKey( $accountKey );
+        if ( is_wp_error( $account ) ) {
+            return self::errorResponse( $account->get_error_message(), self::HTTP_BAD_REQUEST );
+        }
+        if ( empty( $account ) || !$account instanceof AppAccount ) {
+            return self::errorResponse( __( 'Invalid account key provided.', 'integration-google-drive' ), self::HTTP_BAD_REQUEST );
+        }
+        $syncing = get_transient( "ccpigd_syncing_account_{$account->getId()}" );
+        return $this->successResponse( [
+            'syncing' => ( $syncing ? true : false ),
+        ], 'Account syncing status retrieved successfully' );
+    }
+
+    public function sync( WP_REST_Request $request ) : WP_REST_Response {
+        $accountKey = $request->get_param( 'accountKey' );
+        $account = ccpigdGetAccountByKey( $accountKey );
+        if ( is_wp_error( $account ) ) {
+            return self::errorResponse( $account->get_error_message(), self::HTTP_BAD_REQUEST );
+        }
+        if ( empty( $account ) || !$account instanceof AppAccount ) {
+            return self::errorResponse( __( 'Invalid account key provided.', 'integration-google-drive' ), self::HTTP_BAD_REQUEST );
+        }
+        try {
+            $account = Accounts::getInstance()->syncAccount( $account->getId() );
+            if ( is_wp_error( $account ) ) {
+                return $this->errorResponse( $account->get_error_message(), $account->get_error_code() );
+            }
+            wp_schedule_single_event( time() + 5, 'ccpigd_sync_all_files', [$account->getId(), 1] );
+            set_transient( "ccpigd_syncing_account_{$account->getId()}", maybe_serialize( [
+                'status'           => 'started',
+                'processedFolders' => 0,
+                'processedFiles'   => 0,
+                'errors'           => [],
+            ] ), 60 );
+            return $this->successResponse( $account, 'Account synced successfully' );
+        } catch ( \Exception $e ) {
+            return $this->handleException( $e, 'Failed to sync account' );
         }
     }
 

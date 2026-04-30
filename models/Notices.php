@@ -45,7 +45,18 @@ class Notices extends BaseModel
     {
         global $wpdb;
 
-        return $wpdb->get_row($wpdb->prepare("SELECT * FROM %i WHERE id = %d", $this->tableName, $id), $output);
+        $cacheKey = "ccpigd_notice_{$id}";
+        if (false !== ($cachedNotice = wp_cache_get($cacheKey, 'ccpigd_notices'))) {
+            return $cachedNotice;
+        }
+
+        // phpcs:ignore WordPress.DB.DirectDatabaseQuery.DirectQuery
+        $notice = $wpdb->get_row($wpdb->prepare("SELECT * FROM %i WHERE id = %d", $this->tableName, $id), $output);
+        if ($notice) {
+            wp_cache_set($cacheKey, $notice, 'ccpigd_notices');
+        }
+
+        return $notice;
     }
 
     /**
@@ -64,19 +75,39 @@ class Notices extends BaseModel
 
         $status  = $args['status'] ?? 'all';
 
-        $sql     = "SELECT * FROM %i WHERE 1=1";
-        $prompts = [$this->tableName];
+        global $wpdb;
+
+        $sql = $wpdb->prepare("SELECT * FROM %i WHERE 1=1", $this->tableName);
 
         if (!empty($status) && $status !== 'all') {
-            $sql .= " AND status = %s";
-            $prompts[] = $status;
+            $sql .= $wpdb->prepare(" AND status = %s", $status);
         }
 
-        $sql .= " ORDER BY createdAt DESC LIMIT %d OFFSET %d";
-        $prompts[] = $perPage;
-        $prompts[] = $offset;
+        $sql .= $wpdb->prepare(" ORDER BY createdAt DESC LIMIT %d OFFSET %d", $perPage, $offset);
 
-        $notices = $this->fetchAll($sql, $prompts, $output);
+        $validOutputTypes = [OBJECT, ARRAY_A, ARRAY_N];
+
+        if (!in_array($output, $validOutputTypes, true)) {
+            return new WP_Error(400, __('Invalid output type specified.', 'integration-google-drive'));
+        }
+
+        $cacheKey = "ccpigd_notices_page_{$page}_perPage_{$perPage}_status_{$status}_output_{$output}";
+        if (false !== ($cachedNotices = wp_cache_get($cacheKey, 'ccpigd_notices'))) {
+            return $cachedNotices;
+        }
+
+        // phpcs:ignore WordPress.DB.DirectDatabaseQuery.DirectQuery, WordPress.DB.PreparedSQL.NotPrepared
+        $notices = $wpdb->get_results($sql, $output);
+
+        if (is_wp_error($notices)) {
+            return $notices;
+        }
+
+        if (empty($notices)) {
+            return [];
+        }
+
+        // Get total count for pagination
 
         $count       = $this->count();
         $unreadCount = $this->count(['status' => 'unread']);
@@ -96,6 +127,8 @@ class Notices extends BaseModel
         if ($hasMore) {
             $response['nextPage'] = $page + 1;
         }
+
+        wp_cache_set($cacheKey, $response, 'ccpigd_notices');
 
         return $response;
     }
@@ -157,7 +190,14 @@ class Notices extends BaseModel
             '%s', // updatedAt
         ];
 
-        return $this->insert($notice, $format, ARRAY_A);
+        $result = $this->insert($notice, $format, ARRAY_A);
+        if (is_wp_error($result)) {
+            return $result;
+        }
+
+        wp_cache_flush_group('ccpigd_notices');
+
+        return $result;
     }
 
     /**
@@ -176,7 +216,14 @@ class Notices extends BaseModel
             return new WP_Error(404, __('Notice not found.', 'integration-google-drive'));
         }
 
-        return $this->delete(['id' => $id], ['%d']);
+        $result = $this->delete(['id' => $id], ['%d']);
+        if (is_wp_error($result)) {
+            return $result;
+        }
+
+        wp_cache_flush_group('ccpigd_notices');
+
+        return $result;
     }
 
     /**
@@ -186,7 +233,14 @@ class Notices extends BaseModel
      */
     public function deleteAll()
     {
-        return $this->delete([], [], true);
+        $result = $this->delete([], [], true);
+        if (is_wp_error($result)) {
+            return $result;
+        }
+
+        wp_cache_flush_group('ccpigd_notices');
+
+        return $result;
     }
 
     /**
@@ -205,7 +259,14 @@ class Notices extends BaseModel
 
         $status = in_array($status, ['read', 'unread']) ? $status : 'read';
 
-        return $this->update(['status' => $status], ['id' => $id], ['%s'], ['%d'], ARRAY_A);
+        $result = $this->update(['status' => $status], ['id' => $id], ['%s'], ['%d'], ARRAY_A);
+        if (is_wp_error($result)) {
+            return $result;
+        }
+
+        wp_cache_flush_group('ccpigd_notices');
+
+        return $result;
     }
 
     /**
@@ -215,6 +276,13 @@ class Notices extends BaseModel
      */
     public function markAllAsRead()
     {
-        return $this->update(['status' => 'read'], ['status' => 'unread'], ['%s'], ['%s']);
+        $result = $this->update(['status' => 'read'], ['status' => 'unread'], ['%s'], ['%s']);
+        if (is_wp_error($result)) {
+            return $result;
+        }
+
+        wp_cache_flush_group('ccpigd_notices');
+
+        return $result;
     }
 }

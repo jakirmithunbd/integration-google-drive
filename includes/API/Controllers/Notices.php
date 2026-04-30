@@ -93,7 +93,7 @@ class Notices extends BaseController
 
             if (empty($notices)) {
 
-                return $this->errorResponse('No notices found.', self::HTTP_NOT_FOUND);
+                return $this->successResponse([], 'No notices found.');
             }
 
             return $this->successResponse($notices, 'Notices fetched successfully.');
@@ -154,7 +154,7 @@ class Notices extends BaseController
             }
 
             if (empty($notices)) {
-                return $this->errorResponse('Failed to add notice.', self::HTTP_INTERNAL_SERVER_ERROR);
+                return $this->successResponse([], 'Failed to add notice.');
             }
 
             return $this->successResponse(
@@ -183,7 +183,7 @@ class Notices extends BaseController
             }
 
             if (empty($result)) {
-                return $this->errorResponse('Notice not found or already deleted.', self::HTTP_NOT_FOUND);
+                return $this->successResponse([], 'Notice not found or already deleted.');
             }
 
             return $this->successResponse($result, 'Notice deleted successfully.');
@@ -203,7 +203,7 @@ class Notices extends BaseController
             }
 
             if (empty($result)) {
-                return $this->errorResponse('No notices found to clear.', self::HTTP_NOT_FOUND);
+                return $this->successResponse([], 'No notices found to clear.');
             }
 
             return $this->successResponse($result, 'All notices cleared successfully.');
@@ -229,7 +229,7 @@ class Notices extends BaseController
             }
 
             if (empty($result)) {
-                return $this->errorResponse('Notice not found.', self::HTTP_NOT_FOUND);
+                return $this->successResponse([], 'Notice not found.');
             }
 
             return $this->successResponse($result, 'Notice status changed successfully.');
@@ -249,7 +249,7 @@ class Notices extends BaseController
             }
 
             if (empty($result)) {
-                return $this->errorResponse('No notices found to mark as read.', self::HTTP_NOT_FOUND);
+                return $this->successResponse([], 'No notices found to mark as read.');
             }
 
             return $this->successResponse($result, 'All notices marked as read successfully.');
